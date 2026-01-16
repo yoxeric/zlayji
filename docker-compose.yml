@@ -1,0 +1,95 @@
+
+volumes:
+  db_storage:
+  n8n_storage:
+  redis_storage:
+
+services:
+  # 1. The Database (Postgres) - Rock solid storage
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=n8n_password
+      - POSTGRES_DB=n8n
+    volumes:
+      - db_storage:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U n8n -d n8n"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. The Job Queue (Redis) - Manages the workload
+  redis:
+    image: redis:7
+    restart: always
+    volumes:
+      - redis_storage:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. The Main Server (Editor UI & Webhook Listener)
+  n8n:
+    build: . # Uses your custom Dockerfile
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=n8n_password
+      - N8N_ENCRYPTION_KEY=super_secret_key_change_this
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - N8N_HOST=localhost
+      - WEBHOOK_URL=http://localhost:5678/
+      # Security settings (Disable strict runners for easiest Python use)
+      - N8N_RUNNERS_ENABLED=false
+      - N8N_ALLOW_BUILTIN_MODULES_IN_CODE=*
+    links:
+      - postgres
+      - redis
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./scripts:/opt/scripts:ro
+      - ./cookies:/opt/cookies:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. The Worker (Does the heavy scraping)
+  n8n-worker:
+    build: . # Uses the SAME custom image
+    restart: always
+    command: /docker-entrypoint.sh worker
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=n8n_password
+      - N8N_ENCRYPTION_KEY=super_secret_key_change_this
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - N8N_RUNNERS_ENABLED=false
+      - N8N_ALLOW_BUILTIN_MODULES_IN_CODE=*
+    links:
+      - postgres
+      - redis
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./scripts:/opt/scripts:ro
+      - ./cookies:/opt/cookies:ro
+    depends_on:
+      - n8n
