@@ -1,0 +1,12 @@
+[
+    {
+        "url": "https://www.unsplash.com/t/wallpapers",
+        "category": "abstract",
+        "enabled": true
+    },
+    {
+        "url": "https://www.pexels.com/search/wallpaper/",
+        "category": "nature",
+        "enabled": false
+    }
+]

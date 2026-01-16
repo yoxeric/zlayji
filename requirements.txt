@@ -1,0 +1,7 @@
+playwright
+crawl4ai
+google-generativeai
+instagrapi
+requests
+python-dotenv
+pillow
